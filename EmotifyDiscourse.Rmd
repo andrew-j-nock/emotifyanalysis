@@ -1,0 +1,529 @@
+---
+output: html_document
+---
+<span style="color:blue">**Emotify Result Analysis**</span> **by Lauren Schroeder**
+========================================================
+
+Is it possible to understand what type of music people will want to listen to and how it will make them feel? Data was collected on the reactions that different people have to different types of music using an application called 'Emotify'.
+
+Emotify is a game that gives the subject a 60 second clip of a song from a genre chosen by the user. After listening to the song, the user describes their reaction to the song by selecting from a predefined list of possible perceived emotions. These 9 emotions were chosen by using the Geneva Emotional Music Scales (GEMS).
+
+In this analysis I've included an overview of some different relationships among variables and a ['final plots'](#final-plots-and-summary) section with some of the most interesting relationships. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+# Packages used
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library("gridExtra")
+library(boot)
+```
+
+```{r echo=FALSE, Load_the_Data, results='hide'}
+# Loaded Data
+
+data<-read.csv('data.csv')
+```
+
+The data set is made up of 8407 observations of 17 variables. 
+
+```{r echo=F}
+str(data)
+```
+
+How the application works:
+
+A list of 9 emotions are available for listeners to select from when selecting the three emotions they feel the most strongly after listening to their song. They also have the option to 'like' or 'dislike' the song. Track ID shows the song ID number and the genre describes which of the 4 genres the song belongs to. 
+Participants are required to rate their mood on a scale of 1 to 5 before listening to the music. Age and gender is recorded for each listener, as well as their mother tongue.
+
+I'm interested in understanding what influences the genre that is chosen and what may influence the emotions that are felt after listening to the music. I'll build this understanding with exploratory visualizations; first looking at the distribution of different features and then looking into their relationships. The ['final plots'](#final-plots-and-summary) section shows some of the relationships that I found to be most interesting.
+
+Factors that I think could affect the chosen genre would be age, mood, and mother tongue. Different generations tend to listen to different types of music and someone's current state of mind may affect the desired music. Mother tongue may  relate to where in the world the person lives, and there could be cultural differences around what type of music people choose to listen to.
+
+In understanding the trends on which sentiment is recorded after listening to a song, I'll be looking at how this relates to age, gender, genre, mood, and mother tongue. There could be cultural, biological, or semantic differences in how reactions to music may be experienced and described across groups. 
+
+I will be investigating the average occurrence of different emotions as subsetted by different factors (i.e. the percentage of times females select 'joyful activation' as one of their three emotion choices). This will reduce signal from sample size differences across categories.  
+
+##Factor Overview 
+
+**Emotion Selection**
+
+Initially, I decided to get an overview of which emotions were most commonly picked when listening to music. I looked at the ratio that each emotion was chosen among all observations. 
+
+```{r echo=FALSE, Multivariate_Plots6}
+
+feelingcols<-c('amazement','solemnity','tenderness',
+               'nostalgia','calmness','power','joyful_activation',
+               'tension','sadness','liked','disliked')
+
+# Move data to long format to calculate emotion use
+emotion_long<-gather(data, sentiment, present, 
+                     amazement, solemnity, tenderness, 
+                     nostalgia, calmness, power,
+                     joyful_activation, tension, sadness,
+                     liked, disliked, factor_key=TRUE)
+
+# Find mean use of each emotion in total dataset
+average_emotion<-summarise(group_by(emotion_long, sentiment),
+          mean=mean(present))
+
+ggplot(average_emotion, aes(x = sentiment, y = mean)) + 
+  xlab("Sentiment")+
+  ylab("Ratio Sentiment was Chosen")+
+  geom_bar(stat = "identity")
+
+
+```
+
+Calmness was most commonly cited, followed by nostalgia and joyful activation. Amazement was least likely to be cited, occurring in less than 15% of observations. I was curious whether there was a difference between gender for the frequency that different sentiments are cited. About 60% of people chose to like or dislike the song, with more people liking it, although this wasn't necessary to participate.
+
+
+I looked at the genre, gender, mood, and mother tongue distributions in the data set.
+
+**Mother Tongue**
+
+```{r echo=FALSE, Univariate_Plots_dist, warning=F}
+
+ggplot(data=data, aes(x=mother.tongue)) + 
+    geom_bar() +
+    scale_y_log10(breaks=c(10, 50,100,500,1000))+
+  theme(axis.text.x = element_text(angle = 50, hjust = 1))
+summary(data$mother.tongue)
+```
+
+Mother tongue count was plotted on a logarithmic scale, since only three languages had over 1000 participants (English, Dutch, Russian). The rest had under 500 participants, and only one person represented the Lithanian language. This leads me to believe that most participants would be from anglophone countries, Russia, or the Netherlands.  
+
+It's possible that some of these countries that had very few observations had a small number of participants. When analyzing language, I chose to only include languages that had more than 50 observations in order to avoid making generalizations based off of only a few subjects.
+
+**Genre Count**
+
+```{r echo=FALSE, Univariate_Plots_dist2, warning=F}
+
+ggplot(data=data, aes(x=genre)) + 
+    geom_bar() +
+    #scale_y_log10(breaks=c(10, 50,100,500,1000))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+summary(data$genre)
+```
+
+The majority of listeners chose to listen to classical music (2688). Listeners of electronic music, pop, and rock were fairly evenly distributed (1826, 1855, 2038). 
+
+**Gender Count**
+
+```{r echo=FALSE, Univariate_Plots_dist3, warning=F}
+
+#number of males vs. females
+summary(factor(data$gender))
+```
+
+There were 4572 entries for males (0) and 3835 entries for females (1). This is fairly evenly distributed with 54.4% of entries from males and 45.6% of entries from females.
+
+**Mood Distribution**
+
+```{r echo=FALSE, Univariate_Plots_dist4, warning=F}
+
+ggplot(data=data, aes(x=mood)) + 
+    geom_bar() 
+summary(data$mood)
+```
+Total count for each mood level:
+```{r echo=FALSE}
+summary(factor(data$mood))
+
+```
+
+Most participants (over two thirds) recorded a mood level of 3 or 4 out of 5. The median mood is at 4 and the mean mood is at 3.494. 
+
+**Age range of the participants from the data set**
+
+Age distribution is displayed in a histogram with the number of observations in each age section (bin). 
+
+Setting the bin size to 1 year shows that there are no observations for participants above the age of 82, except for a spike at the age of 99. After looking at the Emotify interface, I realized that 99 was the largest possible age to enter (with the field having a two-digit maximum). It's likely that these ages are invalid and were entered by users younger than 99. There are few 99 year olds using these type of apps and no users for other ages between 82 and 99. For this reason I disregarded ages over 82 when looking at relationships between age and genre or mood.
+
+When changing the age histogram bin size to 5 years, general trends can be observed. Most participants are in their mid-twenties, with age observations incrementally decreasing in each subsequent decade above and below.
+
+```{r echo=FALSE, Univariate_Plots, warning=F}
+# Plot age histogram with small bin size
+p1=qplot(x=age,data=data, xlab='Age',ylab='Number of Observations', binwidth=1,color=I('black'),fill=I('blue'))
+
+# Plot age histogram with bin size of five
+
+p2=qplot(x=age,data=data, xlab='Age',ylab='Number of Observations', binwidth=5
+      ,color=I('black'),fill=I('blue'))
+# print histograms together
+grid.arrange(p1, p2, ncol=1)
+summary(subset(data$age,(data$age<85 & data$age>5 )))
+```
+
+The average age was 31.78, with the median age being 28. Fifty percent of the participants were between the ages of 23 and 37.
+
+
+# Bivariate Plots Section
+
+First I looked at how the ratio of male to female participants changed across age.
+
+```{r, echo=FALSE, warning=F}
+
+age_gender<-group_by(data,age)
+# Calculate mean of gender (ratio of female) for each age group
+pf.gender_age<-summarize(age_gender,
+                            gender_mean=mean(gender),
+                            n=n())
+
+pf.gender_age<-subset(pf.gender_age,n>10)
+pf.gender_age_corr<-subset(pf.gender_age,select=c('age','gender_mean'))
+
+ggplot(aes(x=age,y=gender_mean),data=pf.gender_age)+
+  geom_point()
+#pearson's r correlation test
+corr(pf.gender_age_corr,w=pf.gender_age$n)
+
+pf.gender_age2<-subset(pf.gender_age,n>22)
+pf.gender_age2<-subset(pf.gender_age2,n<37)
+
+#pearson's r correlation test for medium ages
+corr(pf.gender_age_corr,w=pf.gender_age2$n)
+```
+
+This scatterplot shows the ratio of females to males (gender mean) across ages. When calculating the correlation between gender and age, I used a correlation test (Pearson's R) weighted with the number of participants in each age group. There was only a small linear correlation of r=-0.33, showing that younger users trended towards being female but no strong correlation was found. There were a few stong outliers; older groups were all male and the youngest were all female. I also looked at the correlation of the median 50% of ages and found a stronger correlation of r=-1.06. Overall, there is a lot of variation between ages and gender ratio.
+
+Below I looked at the age ranges listening to different types of music to understand if different generations preferred to listen to different music. 
+
+```{r echo=FALSE, Bivariate_Plots, warning=F}
+#ages listening to different genres of music
+qplot(x=genre,y=age, geom='boxplot',data=data,color=I('black'),
+      fill=I('blue'), ylim=c(1,85))
+younger<-subset(data,age<95)
+means<-aggregate(younger,by=list(younger$genre), FUN=mean)
+
+subset(means,select=c(Group.1,age))
+```
+
+
+Listeners of classical music were older, with a mean age of 34.7. The mean age of electronic music was the lowest, being 29.7 years. I looked into this data in the ['final plots'](#final-plots-and-summary) section below.
+
+In order to understand whether the different age groups were responding to music with the same type of emotions, I looked at how different emotions were chosen across the age range.
+
+```{r echo=FALSE, Plot_One_summary}
+# Calculate mean of sentiments chosen for each age group
+
+age_groups<-group_by(data,age)
+
+pf.nostalgia_age<-summarize(age_groups,
+                            nostalgia_mean=mean(nostalgia),
+                            tenderness_mean=mean(tenderness),
+                            power_mean=mean(power),
+                            joyful_activation_mean=mean(joyful_activation),
+                            amazement_mean=mean(amazement),
+                            solemnity_mean=mean(solemnity),
+                            sadness_mean=mean(sadness),
+                            tension_mean=mean(tension),
+                            calm_mean=mean(calmness),
+                            n=n())
+pf.nostalgia_age<-arrange(pf.nostalgia_age)
+
+#Remove ages outside range of 12-90, and with age groups with under 10 members.
+pf.nostalgia_age<-subset(pf.nostalgia_age,age<90 & n>9 & age>12)
+
+create_plot <- function(varname, ylab= '') {
+  return(ggplot(aes_string(x='age',y=varname), data=pf.nostalgia_age)+
+  geom_line()+
+  geom_smooth()+
+  xlab("Age")+
+  ylab(ylab))
+}
+
+e1<-create_plot('nostalgia_mean', 'Nostalgia')
+e2<-create_plot('tenderness_mean', 'Tenderness')
+e3<-create_plot('power_mean', 'Power')
+e4<-create_plot('amazement_mean', 'Amazement')
+e5<-create_plot('solemnity_mean', 'Solemnity')
+e6<-create_plot('calm_mean', 'Calm')
+e7<-create_plot('sadness_mean', 'Sadness')
+e8<-create_plot('joyful_activation_mean', 'Joyful Activation')
+e9<-create_plot('tension_mean', 'Tension')
+
+grid.arrange(e1, e2, e3,e4,e5,e6,e7,e8,e9, ncol=3,
+             top="Emotions Ellicited Among Different Ages (Ratio Chosen)")
+```
+
+I only looked at ages 12-82 where there were at least 10 participants in the age bin. There was a large amount of variation as seen in the line graphs, so a blue smoothed line was added to show the general trend of the occurrence of each emotion. 
+
+I found that nostalgia, amazement, and sadness generally seemed to decrease with age. On the other hand, for participants over the age of 60, tenderness, joyful activation, and tension were increased. 
+
+Participants under the age of 20 were more likely to cite amazement and solemnity than the older participants. Music must have a large impression to create amazement in a listener, or bring a reverent solemnity, so perhaps younger listeners are more easily swayed by the music.
+
+
+# Multivariate Plots Section
+
+After looking at the average occurrence of different emotions, I decided to investigate whether there was a difference in what emotion was chosen between male and female subjects. 
+
+```{r echo=FALSE, Multivariate_Plots1,fig.width = 9, fig.height = 4}
+
+average_emotion_gender<-summarise(group_by(emotion_long,sentiment,gender),
+          mean=mean(present))
+
+average_emotion_gender$gender <- c('Male', 'Female')
+ggplot(average_emotion_gender, aes(x = sentiment,y = mean,
+                                   fill=factor(gender))) +       
+  geom_bar(stat="identity",position="dodge")
+
+
+```
+Results were not considerably different between genders, but there were a few things I noted when observing this chart. Males were more likely than females to cite placid emotions such as 'calmness' and 'solemnity' as opposed to stronger emotions like 'amazement', 'nostalgia', or 'sadness'. Males were also more likely to record whether they 'liked' or 'disliked' a particular song.
+
+
+**Average Emotion for Different Genres**
+
+Plotting the ratio of sentiments expressed as it relates to genre shows what people tended to feel when listening to different genres. Color hue represents the ratio of times the sentiment was expressed (0 to 4.5).
+
+```{r,echo=F,fig.width = 8, fig.height = 4}
+
+average_emotion_genre<-summarise(group_by(emotion_long,sentiment,genre),
+          mean=mean(present))
+
+#make it wide
+#average_emotion_gender<-spread(average_emotion_gender,gender,mean)
+ggplot(average_emotion_genre, aes(x = sentiment,y = genre,fill=mean))+
+                  geom_tile()+
+  
+  scale_fill_gradientn(colours=(c('pink','purple')))
+```
+
+A few differences stood out in this heatmap. Tension was rarely picked for most genres of music, but for electronic music it was the most common sentiment to feel. On the other hand, electronic music listeners rarely cited tenderness or nostalgia (feelings that were more often cited when listening to pop music). 
+
+This may be due to the ethereal quality to much of the electronic music on Emotify. There is less of a human quality to the abstract sounds that are used in electronic music so the songs may not bring up memories of loved ones.
+
+**Mood and Genre Choice**
+
+I looked into whether participants recording different moods (scale of 1 to 5) chose to listen to different genres of music.
+
+```{r echo=FALSE, Multivariate_Plots2}
+
+#genres picked based on mood
+  
+ggplot(subset(data,age<85),aes(fill=as.factor(mood),x=genre)) +
+  geom_bar(position="dodge")
+
+```
+
+There was not a particularly strong signal, the chart has a similar shape for each of the four genres, but I noticed that people at a mood level of 1 were least likely to listen to rock music than other genres but people with a mood level of 2 were most likely to choose rock music. Groups at all mood levels besides '2' were most likely to listen to classical music.
+
+I then looked to see if there was more of a relationship between mood and the sentiments chosen after listening to the preferred genre. 
+
+
+**Current Mood and Sentiment Chosen**
+
+```{r echo=FALSE, Multivariate_Plots3}
+average_emotion_mood<-summarise(group_by(data,mood),
+                            nostalgia_mean=mean(nostalgia),
+                            tenderness_mean=mean(tenderness),
+                            power_mean=mean(power),
+                            joyful_activation_mean=mean(joyful_activation),
+                            amazement_mean=mean(amazement),
+                            solemnity_mean=mean(solemnity),
+                            sadness_mean=mean(sadness),
+                            tension_mean=mean(tension),
+                            calm_mean=mean(calmness),
+                            n=n())
+
+emotion_mood<-gather(average_emotion_mood,sentiment,mean,
+                     amazement_mean,solemnity_mean,tenderness_mean,
+                     nostalgia_mean,calm_mean,power_mean,
+                     joyful_activation_mean,tension_mean,sadness_mean,
+                     factor_key=TRUE)
+
+ggplot(emotion_mood, aes(x = mood,y =sentiment ,fill=mean))+
+                  geom_tile()+
+  
+  scale_fill_gradientn(colours=(c('grey','blue')))
+
+summary(emotion_mood)
+  
+```
+
+All sentiments were chosen somewhere between 10% - 40% of the time and the average mood of each participant was 3.49/5. The relationship that stood out to me the most in this map was the calming effect of the music. Experiencing 'calm' was common for people at all mood levels, but people who were at the lowest mood level were more likely to choose it, along with sadness. The lowest mood group chose 'calm' at a rate of 36.4% while it was chosen at rates of 30.5%, 28.9%, 31.3%, and 30.7% for mood group 2, 3, 4, 5, respectively. They also chose sadness at the highest rate of 28.9%.  
+
+
+**Language and emotion**
+
+```{r echo=FALSE, Multivariate_Plots4,fig.width = 10, fig.height = 4}
+average_emotion_lang<-summarise(group_by(emotion_long,sentiment,mother.tongue),
+          mean=mean(present),n=n())
+
+average_emotion_lang<-subset(average_emotion_lang,n>50)
+
+ggplot(average_emotion_lang, aes(x = sentiment,y = mother.tongue,fill=mean))+
+                  geom_tile()+
+  
+  scale_fill_gradientn(colours=(c('pink','purple')))
+
+```
+
+When comparing native language with sentiment chosen, I only looked at languages with over 50 members. There were a couple languages that showed a higher or lower citation of certain emotions. 
+
+Chinese participants were more likely to cite 'joyful activation' or 'nostalgia' and Spanish and Italian participants were more likely to cite 'calmness'. Swedish participants were more likely to cite 'power' and 'tension'. 
+
+It's possible that this could relate to a cultural difference in regard to music preference, or a semantic difference in how different sentiments are translated among languages. I decided to check whether different genres were chosen by people of different mother tongues.
+
+
+**Language and Genre Choice**
+
+```{r echo=FALSE, Multivariate_Plots5}
+genre_lang<-summarise(group_by(emotion_long,mother.tongue,genre),
+          n=n())
+
+#make it wide
+genre_lang<-spread(genre_lang,genre,n)
+
+#replace na with 0
+genre_lang[is.na(genre_lang)] <- 0
+
+
+genre_lang$total<-genre_lang$rock+genre_lang$classical+
+  genre_lang$electronic+genre_lang$pop
+
+
+#keep data with n>300
+genre_lang<-subset(genre_lang,total>300)
+#create percentage
+genre_lang$Rock<-genre_lang$rock/genre_lang$total
+genre_lang$Electronic<-genre_lang$electronic/genre_lang$total
+genre_lang$Classical<-genre_lang$classical/genre_lang$total
+genre_lang$Pop<-genre_lang$pop/genre_lang$total
+
+genre_lang<-gather(genre_lang,Genre,Percentage,
+                   Rock,Electronic,Classical,Pop,
+                   factor_key=TRUE)
+
+ggplot(genre_lang, aes(x = Genre,y = mother.tongue,fill=Percentage))+
+                  geom_tile()+
+  
+  scale_fill_gradientn(colours=(c('pink','purple')))
+```
+
+Arabic and Swedish speakers were most likely to choose classical music, while Romanian speakers were most likely to choose pop. Czech speakers leaned towards electronic music.
+
+**Are certain songs always liked or disliked?**
+
+When listening to music, everyone has the option to either 'like' or 'dislike' the song. I was curious whether any songs were consistently liked or disliked. To find out, I found the percentage that each song was liked or disliked, after grouping rows by song ID.
+
+**Likeability of Individual Songs**
+
+```{r,echo=F}
+songchoice<-group_by(data,track.id,genre)
+
+songinfo<-summarize(songchoice,
+                            songlike_mean=mean(liked),
+                            
+                            songdislike_mean=mean(disliked),
+                            n=n())
+ggplot(songinfo,aes(x=track.id,y=songlike_mean))+
+  geom_point(aes(color=genre))+
+  geom_text(aes(label=ifelse(songlike_mean>.75,as.character(track.id),'')),
+            hjust=-.50,vjust=.50)
+  
+ggplot(songinfo,aes(x=track.id,y=songdislike_mean))+
+  geom_point(aes(color=genre))+
+  geom_text(aes(label=ifelse(songdislike_mean>.5,as.character(track.id),'')),
+            hjust=-.50,vjust=.50)
+  
+```
+
+People were much less likely to dislike classical music but songs in the other genres had more variability; the songs had a larger distribution of likability. The two most 'liked' songs were rock and classical songs. Pop and electronic genres contained the four most disliked songs. 
+
+# Multivariate Analysis
+
+I found that when looking at genre, age played an important role in the selection. Mood and language played less of a difference but some things stood out. For example, Arabic speaking listeners were much more likely to listen to classical music.
+
+I investigated what relationship age, gender, genre, language, and mood had with sentiment selection. Electronic music seemed to have a very different relationship with the subject's reactions. They were more likely to choose 'tension' as a reaction and less likely to choose more human emotions such as 'tenderness' and 'nostalgia'. Males were more likely to chose mellow emotions like 'calm' and 'solemnity' to describe their reactions. 
+
+When observing different features, there were not many signals that were particularly strong; all emotions tended to be chosen between 10 and 40 percent of the time. On the other hand, the data set was large enough where the medians of ages listening to different genres were significantly different. I was surprised how small the notch width was (see ['figure'](#plot-two) below), and a small different in values lead to a significantly different median for classical music listeners. 
+
+I found it most interesting to observe the effect that mood and genre had on the emotions that were chosen. Those who were unhappy were more likely to listen to pop music than those who were happy, but they were also more likely to describe the music they listen to as sad. Those who were happy tended to choose classical music and describe the music they chose as bringing joyful activation or solemnity.
+
+------
+
+# Final Plots and Summary
+
+### Plot One
+```{r echo=FALSE, Plot_One}
+
+library(grid)
+emo_old<-arrangeGrob(e1, e4,e7, ncol=3,
+             top="Sentiments Found Less Commonly in Higher Age Groups:")
+emo_young<-arrangeGrob(e2,e8,e9, ncol=3,
+             top="Sentiments Found More Commonly in Higher Age Groups:")
+
+grid.arrange(emo_old,
+             emo_young,ncol=1,
+             top=textGrob("Emotion Selection Ratio for Different Ages",gp=gpar(fontsize=20,font=2)))
+```
+
+### Description One
+
+The ratio that each emotion was chosen by participants in each observation was plotted against the age of the participant.
+
+I found that there was a lot of noise in the change in emotion selection across different ages. Some of these emotions tended to trend in different directions for different age groups. I found that nostalgia, amazement, and sadness were chosen less commonly for people older than 50. Amazement is most prevelant for people younger than 20, but nostalgia and sadness seem to reach a peak around the age of 40. 
+
+On the other hand, tenderness, joyful activation, and tension are more prevelant among higher age groups. Tenderness and joyful activation occur at particularly constant rates ages below 50, but show large spikes in prevelance for some older age groups.
+
+
+  Within the applications, users have the choice of which of the four music genres they would like to listen to. I was curious if different genres were picked by different age ranges. In representing the data as a box plot, I found that classical music was preferred by older participants. Pop and rock had similar age distributions and the age distribution for electronic music was only slightly lower.
+
+### Plot Two
+```{r echo=FALSE, warning=F, Plot_Two}
+
+#ages listening to different genres of music
+qplot(x=genre,y=age, geom='boxplot',data=data, main='Age Range Selection Each Genre',xlab='Music Genre Chosen',ylab='Age',color=I('black'),fill=I('blue'), notch=TRUE, ylim=c(1,85))
+
+```
+
+### Description Two
+A notched box plot showing the age ranges that chose to listen to each of the four genres. The median age listening to classical music is significantly higher at a 95% CI. 
+
+### Plot Three
+```{r echo=FALSE, Plot_Three}
+ylabels_sentiments<-c('Solemnity',  'Calm',
+                       'Joyful Activation', 'Tension', 'Sadness')
+
+selection_sent<-subset(emotion_mood[emotion_mood$sentiment %in% c('solemnity_mean', 'calm_mean', 'joyful_activation_mean', 'tension_mean','sadness_mean'), ])
+
+ggplot(selection_sent, aes(x = as.factor(mood),y =sentiment ,fill=mean))+
+  geom_tile()+
+  ggtitle('Emotions Selected for Participants with Different Mood    
+          Levels')+
+  xlab('Mood Level (0-5)')+
+  scale_y_discrete(labels=ylabels_sentiments)+
+  ylab('Sentiment')+
+  labs(fill = "Selection Ratio")+
+  theme(legend.title = element_text(colour="black", size=8))+
+  
+  scale_fill_gradientn(colours=(c('grey','blue')))
+
+```
+
+### Description Three
+
+Sentiment and mood level are compared to understand the frequency that each sentiment is chosen for subjects at different mood levels. Those at the lowest mood level of 1 were more likely to choose calm or sadness while those at the highest mood level of 5 were more likely to choose calm or joyful activation. Being in a good mood may make someone more likely to feel joyful activation while listening to a song.
+
+Those at the highest mood level of 5 were more likely than those at other mood levels to choose 'solemnity'. Perhaps certain songs have a sobering effect on their uplifted attitude, while they may be perceived as sad or calm by those subjects who were in lower spirits.
+
+------
+
+# Reflection
+I enjoyed visualizing different aspects of this data to understand what lead people to feel different ways while listening to music. When plotting heatmaps showing the frequency that different emotions were chosen among different subgroups of users, I was often able to pick out certain emotions that were much more prominent (e.g. tension felt while listening to electronic music).
+
+One of the more challenging parts of this analysis was choosing how to evaluate the strength of different emotions. For each observation in the study, the appearance of an emotion was recorded as a binary value; 0 if it was not chosen and 1 if it was. Throughout the analysis, I had to reshape the data in order to calculate the percentage of times that the emotion was experienced for each subgroup to be compared.
+
+When looking at the particular songs that were often liked or disliked, I was able to pick out the ID number of songs that people disliked the most. For further analysis, it would be interesting to look into the correlation between these popular and unpopular songs and the emotions that were chosen. Do people prefer songs that make them nostalgic or happy?
+
+This type of data could also be used to create a machine learning algorithm for a radio station. Users could give feedback on what type of music they enjoy and this type of analysis could be used to build stations centered on different emotions with music that people enjoy.
+
+More information on the study can be found at:
+
+A. Aljanaki, F. Wiering, R. C. Veltkamp. Studying emotion induced by music through a crowdsourcing game. Information Processing & Management, 2015.
+
+Link to game: http://emotify.org/
+
